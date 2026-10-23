@@ -6,10 +6,9 @@ const phone = z.string().trim().regex(/^\+?[0-9][0-9 ()-]{5,24}$/, 'Enter a vali
 const imageUrl = z.url().max(2048).refine(value => /^https?:\/\//.test(value),
   'Use an HTTP(S) URL').nullable();
 
-export const idParams = z.object({
-  id: z.string().regex(/^[1-9]\d{0,18}$/).pipe(z.string()
-    .refine(value => BigInt(value) <= 9223372036854775807n, 'ID out of range')),
-});
+const id = z.string().regex(/^[1-9]\d{0,18}$/).pipe(z.string()
+  .refine(value => BigInt(value) <= 9223372036854775807n, 'ID out of range'));
+export const idParams = z.object({ id });
 
 // Profiles are fields on the user/seller row, not separate tables.
 const userProfileFields = {
@@ -36,3 +35,16 @@ export const userProfileSchema = z.strictObject(userProfileFields).partial()
   .refine(value => Object.keys(value).length > 0, 'Supply at least one profile field');
 export const sellerProfileSchema = z.strictObject(sellerProfileFields).partial()
   .refine(value => Object.keys(value).length > 0, 'Supply at least one profile field');
+
+const productFields = {
+  name: text(150), description: z.string().trim().max(2000).default(''),
+  // Store money as decimal strings: never convert PostgreSQL NUMERIC to a JS float.
+  price: z.string().regex(/^(0|[1-9]\d{0,9})\.\d{2}$/, 'Use a price string such as "125.50"')
+    .refine(value => value !== '0.00', 'Price must be positive'),
+  stock: z.number().int().min(0).max(2147483647).default(0),
+  image_url: imageUrl.default(null),
+};
+export const createProductSchema = z.strictObject({ seller_id: id, ...productFields });
+// Updating product details does not transfer the product to another seller.
+export const updateProductSchema = z.strictObject(productFields);
+export const productFilterSchema = z.strictObject({ seller_id: id.optional() });

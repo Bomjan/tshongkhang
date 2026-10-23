@@ -1,7 +1,7 @@
 {
   "name": "tshongkhang",
   "version": "1.0.0",
-  "description": "Tshongkhang mid-review user, seller and profile CRUD API",
+  "description": "Tshongkhang mid-review user, seller, product and profile CRUD API",
   "main": "src/server.js",
   "directories": {
     "doc": "docs",
