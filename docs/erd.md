@@ -1,57 +1,27 @@
-# Database ERD
+# Mid-review database ERD
 
-This matches `db/migrations/001_initial.sql`. All foreign keys use `ON DELETE RESTRICT`.
+The current application uses two independent tables. Profiles are fields on these tables, so there is no separate profile table or relationship to maintain.
 
 ```mermaid
 erDiagram
-    sellers ||--o{ products : owns
-    sellers ||--o{ orders : receives
-    orders ||--|{ order_items : contains
-    products ||--o{ order_items : appears_in
-
+    users {
+        bigint id PK
+        text name
+        text email UK
+        text phone "nullable"
+        text address "default empty string"
+        text avatar_url "nullable"
+        timestamptz created_at
+    }
     sellers {
         bigint id PK
         text business_name
         text email UK
-        text password_hash
-        text phone
-        text location
-        text storefront_slug UK
-        text qr_image_url "nullable"
+        text phone "nullable"
+        text location "default empty string"
+        text description "default empty string"
+        text logo_url "nullable"
         timestamptz created_at
-    }
-    products {
-        bigint id PK
-        bigint seller_id FK
-        text name
-        text description
-        numeric_12_2 price
-        integer stock "non-negative"
-        text image_url "nullable"
-        boolean is_active
-        timestamptz created_at
-    }
-    orders {
-        bigint id PK
-        bigint seller_id FK
-        text reference UK "192 random bits, 48 hex characters"
-        text customer_name
-        text customer_phone
-        text delivery_address
-        numeric_12_2 total_amount
-        text status
-        text payment_proof_url "nullable"
-        text cancellation_reason "required only for Cancelled"
-        timestamptz created_at
-        timestamptz updated_at
-    }
-    order_items {
-        bigint id PK
-        bigint order_id FK
-        bigint product_id FK
-        text product_name "purchase-time snapshot"
-        numeric_12_2 unit_price "purchase-time snapshot"
-        integer quantity "positive"
     }
     schema_migrations {
         text name PK
@@ -59,8 +29,8 @@ erDiagram
     }
 ```
 
-`numeric_12_2` denotes PostgreSQL `NUMERIC(12,2)`. Money must be positive. `order_items` also has a composite unique constraint on `(order_id, product_id)`; duplicate checkout lines are merged before insertion. The migration runner creates the separate administrative `schema_migrations` table.
+The [SQL migration](../db/migrations/001_mid_review.sql) creates `users` and `sellers`. The migration runner creates the administrative `schema_migrations` table to remember applied files. There are deliberately no foreign keys in this checkpoint because the application tables are independent.
 
-Order creation requires at least one item at the API level; the foreign key alone does not require a child row. Product-to-storefront consistency and status transition history are enforced by the service transaction. The database additionally constrains allowed status values, cancellation reason consistency, monetary values, quantities, stock, normalized emails, and reference/slug formats.
+Primary keys are generated identities. Unique email constraints automatically create indexes; primary keys are indexed as well. Emails must be lowercase, names must be nonblank, and names/emails/creation times cannot be null. Optional phones and image URLs may be null. Zod provides additional API validation for emails, phone formatting, URL schemes, and text length limits.
 
-Indexes support seller product listings, active storefront products, seller order listings with/without status filters, and product references from order items. Primary keys and unique constraints create their own indexes; the `(order_id, product_id)` unique index also supports fetching items by order.
+Future authentication work must decide whether to link sellers to user accounts or introduce a shared account table. That relationship is not implemented here.
