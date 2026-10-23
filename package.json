@@ -1,0 +1,42 @@
+{
+  "name": "tshongkhang",
+  "version": "1.0.0",
+  "description": "Tshongkhang storefront and guest order API",
+  "main": "src/server.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node db/migrate.js",
+    "test": "node --test tests/*.test.js",
+    "test:integration": "node --test tests/integration.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bomjan/tshongkhang.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "bugs": {
+    "url": "https://github.com/Bomjan/tshongkhang/issues"
+  },
+  "homepage": "https://github.com/Bomjan/tshongkhang#readme",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  }
+}
