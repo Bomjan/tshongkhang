@@ -31,7 +31,7 @@ before(async () => {
   base = `http://127.0.0.1:${server.address().port}`;
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE users, sellers RESTART IDENTITY');
+  await pool.query('TRUNCATE products, users, sellers RESTART IDENTITY');
 });
 after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
@@ -105,12 +105,79 @@ for (const resource of [
   });
 }
 
-test('health route works and authentication, admin and commerce routes are absent', async () => {
+test('health route works and authentication, admin and old commerce routes are absent', async () => {
   assert.equal((await request('GET', '/health')).status, 200);
   assert.equal((await request('POST', '/auth/login', {})).status, 404);
   assert.equal((await request('GET', '/admin')).status, 404);
   assert.equal((await request('GET', '/seller/products')).status, 404);
   assert.equal((await request('POST', '/stores/shop/orders', {})).status, 404);
+});
+
+async function createSeller(email = 'shop@example.com') {
+  const response = await request('POST', '/sellers', { business_name: 'Pema Store', email });
+  assert.equal(response.status, 201);
+  return response.body;
+}
+
+test('products: create, list, read, replace, filter by seller and delete', async () => {
+  const seller = await createSeller();
+  const other = await createSeller('other@example.com');
+  const created = await request('POST', '/products', {
+    seller_id: seller.id, name: 'Red rice', price: '125.50', stock: 10, description: 'Local rice',
+  });
+  assert.equal(created.status, 201);
+  const product = created.body;
+  assert.equal(product.seller_id, seller.id);
+  assert.equal(product.price, '125.50');
+  assert.equal(typeof product.price, 'string');
+  assert.equal(product.stock, 10);
+  assert.deepEqual((await request('GET', '/products')).body.map(row => row.id), [product.id]);
+  assert.equal((await request('GET', `/products/${product.id}`)).body.name, 'Red rice');
+  assert.deepEqual((await request('GET', `/products?seller_id=${seller.id}`)).body.map(row => row.id), [product.id]);
+  assert.deepEqual((await request('GET', `/products?seller_id=${other.id}`)).body, []);
+  const updated = await request('PUT', `/products/${product.id}`, { name: 'Rice 1kg', price: '130.00', stock: 5 });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.price, '130.00');
+  assert.equal(updated.body.stock, 5);
+  assert.equal(updated.body.description, '');
+  assert.equal(updated.body.image_url, null);
+  assert.equal(updated.body.seller_id, seller.id);
+  assert.equal((await request('DELETE', `/products/${product.id}`)).status, 204);
+  assert.equal((await request('GET', `/products/${product.id}`)).status, 404);
+  assert.equal((await request('DELETE', `/products/${product.id}`)).status, 404);
+  assert.equal((await request('PUT', `/products/${product.id}`, { name: 'Rice', price: '1.00' })).status, 404);
+});
+
+test('products: reject invalid prices, quantities, IDs, images and missing sellers', async () => {
+  const seller = await createSeller();
+  const data = { seller_id: seller.id, name: 'Rice', price: '125.50' };
+  for (const price of [125.5, '0.00', '-1.00', '1.001', '1', '10000000000.00']) {
+    assert.equal((await request('POST', '/products', { ...data, price })).status, 400);
+  }
+  for (const stock of [-1, 1.5, '2', 2147483648]) {
+    assert.equal((await request('POST', '/products', { ...data, stock })).status, 400);
+  }
+  assert.equal((await request('POST', '/products', { ...data, name: ' ' })).status, 400);
+  assert.equal((await request('POST', '/products', { ...data, image_url: 'not-a-url' })).status, 400);
+  assert.equal((await request('POST', '/products', { ...data, seller_id: '999999' })).status, 404);
+  assert.equal((await request('GET', '/products/abc')).status, 400);
+  assert.equal((await request('GET', '/products?seller_id=abc')).status, 400);
+  const created = await request('POST', '/products', data);
+  assert.equal(created.status, 201);
+  assert.equal(created.body.stock, 0);
+  assert.equal((await request('PUT', `/products/${created.body.id}`, data)).status, 400);
+});
+
+test('products: foreign key prevents deleting a seller until its products are deleted', async () => {
+  const seller = await createSeller();
+  const created = await request('POST', '/products', { seller_id: seller.id, name: 'Rice', price: '0.10' });
+  assert.equal(created.status, 201);
+  assert.equal((await request('DELETE', `/sellers/${seller.id}`)).status, 409);
+  assert.equal((await request('GET', `/products/${created.body.id}`)).status, 200);
+  await assert.rejects(pool.query('UPDATE products SET stock = -1 WHERE id = $1', [created.body.id]), { code: '23514' });
+  await assert.rejects(pool.query('UPDATE products SET price = 0 WHERE id = $1', [created.body.id]), { code: '23514' });
+  assert.equal((await request('DELETE', `/products/${created.body.id}`)).status, 204);
+  assert.equal((await request('DELETE', `/sellers/${seller.id}`)).status, 204);
 });
 
 test('malformed JSON returns a clear error', async () => {
