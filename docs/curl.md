@@ -38,3 +38,22 @@ curl -sS -X PATCH "$BASE/sellers/1/profile" -H 'Content-Type: application/json' 
   -d '{"location":"Paro","description":"A local grocery shop"}'
 curl -i -X DELETE "$BASE/sellers/1"
 ```
+
+## Product CRUD
+
+Create a seller first and replace the seller/product IDs below with the returned IDs. Delete products before deleting their seller.
+
+```sh
+BASE=http://localhost:3000/api
+curl -sS -X POST "$BASE/sellers" -H 'Content-Type: application/json' \
+  -d '{"business_name":"Rice Shop","email":"rice-shop@example.com"}'
+curl -sS -X POST "$BASE/products" -H 'Content-Type: application/json' \
+  -d '{"seller_id":"1","name":"Red rice 1kg","price":"125.50","stock":10}'
+curl -sS "$BASE/products"
+curl -sS "$BASE/products?seller_id=1"
+curl -sS "$BASE/products/1"
+curl -sS -X PUT "$BASE/products/1" -H 'Content-Type: application/json' \
+  -d '{"name":"Red rice 1kg - updated","price":"130.00","stock":8}'
+curl -i -X DELETE "$BASE/products/1"
+curl -i -X DELETE "$BASE/sellers/1"
+```

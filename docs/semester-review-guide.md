@@ -4,7 +4,7 @@
 
 **Demonstration tool:** Postman
 
-**Current scope:** simple user CRUD, seller CRUD, and profile viewing/editing
+**Current scope:** simple user, seller, and product CRUD, plus user/seller profile viewing/editing
 
 **Next sprint:** authentication, authorization, and admin
 
@@ -12,7 +12,7 @@ This guide describes the simplified code currently in this repository. The earli
 
 ## 1. How to introduce the project
 
-> “Tshongkhang is a planned storefront and management system for small businesses in Bhutan. For our mid-review, we have completed the basic backend foundation: creating, reading, updating, and deleting user and seller records, and managing their profiles. We demonstrate these APIs using Postman. Authentication and admin features are planned for the next sprint.”
+> “Tshongkhang is a planned storefront and management system for small businesses in Bhutan. For our mid-review, we have completed the basic backend foundation: creating, reading, updating, and deleting user, seller, and product records, and managing user/seller profiles. We demonstrate these APIs using Postman. Authentication and admin features are planned for the next sprint.”
 
 This separates the long-term idea from the work actually completed. Do not present the current user creation endpoint as secure signup: it creates a database record and does not create login credentials.
 
@@ -24,16 +24,17 @@ This separates the long-term idea from the work actually completed. Do not prese
 | PostgreSQL connection | Implemented | `src/config/database.js` |
 | User CRUD | Implemented | `src/routes/user.js`, `src/controllers/user.js` |
 | Seller CRUD | Implemented | `src/routes/seller.js`, `src/controllers/seller.js` |
+| Product CRUD and seller filtering | Implemented | `src/routes/product.js`, `src/controllers/product.js` |
 | User profile viewing/editing | Implemented | User profile GET/PATCH endpoints |
 | Seller profile viewing/editing | Implemented | Seller profile GET/PATCH endpoints |
 | Validation | Implemented | `src/schemas/requests.js` |
 | Error responses | Implemented | `src/middleware/errors.js` |
-| SQL migration and ERD | Implemented | `db/migrations/001_mid_review.sql`, `docs/erd.md` |
+| SQL migrations and ERD | Implemented | `db/migrations/`, `docs/erd.md` |
 | Postman examples | Provided | Importable collection in `postman/` |
 | Integration tests | Implemented | `tests/integration.test.js` |
 | Authentication and ownership | Next sprint | No passwords, login, JWTs, or protected routes now |
 | Admin | Next sprint | No admin routes or role permissions now |
-| Products, checkout, orders, payments | Outside this checkpoint | No active modules/endpoints for them |
+| Checkout, orders, payments | Outside this checkpoint | No active modules/endpoints for them |
 | Frontend | Outside this checkpoint | Postman acts as the API client |
 
 The simplified backend uses only four runtime dependencies: `express`, `pg`, `dotenv`, and `zod`. Password/token/rate-limit libraries from the earlier version have been removed.
@@ -89,9 +90,11 @@ src/
   routes/
     user.js                  User endpoint definitions
     seller.js                Seller endpoint definitions
+    product.js               Product endpoint definitions
   controllers/
     user.js                  User SQL and response handling
     seller.js                Seller SQL and response handling
+    product.js               Product SQL and response handling
   middleware/
     validate.js              Turns Zod validation failures into HTTP 400
     errors.js                Central error handling and HttpError
@@ -101,6 +104,7 @@ db/
   migrate.js                 Applies unapplied SQL files
   migrations/
     001_mid_review.sql       Creates users and sellers
+    002_products.sql         Adds products linked to sellers
 tests/
   integration.test.js        Real PostgreSQL and HTTP tests
 postman/
@@ -116,7 +120,7 @@ docs/
 
 ## 6. Database design
 
-There are **two application tables**, plus a small migration bookkeeping table. Users and sellers are independent records in this checkpoint.
+There are **three application tables**, plus a small migration bookkeeping table. Users and sellers are independent records in this checkpoint.
 
 ### 6.1 `users`
 
@@ -143,7 +147,24 @@ There are **two application tables**, plus a small migration bookkeeping table. 
 | `logo_url` | TEXT, nullable | Optional HTTP(S) logo URL |
 | `created_at` | TIMESTAMPTZ | Creation time, automatically set by PostgreSQL |
 
-### 6.3 Why profiles are not separate tables
+### 6.3 `products`
+
+| Field | Type | Purpose and rule |
+| --- | --- | --- |
+| `id` | BIGINT generated identity | Product primary key |
+| `seller_id` | BIGINT foreign key | Required reference to an existing seller |
+| `name` | TEXT | Required, nonblank, maximum 150 characters |
+| `description` | TEXT | Default empty string; API maximum 2,000 characters |
+| `price` | NUMERIC(12,2) | Positive amount, supplied/returned as a decimal string |
+| `stock` | INTEGER | Non-negative available quantity; default 0 |
+| `image_url` | TEXT, nullable | Optional HTTP(S) product image URL |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
+
+A seller has zero or many products. Each product belongs to one existing seller. The foreign key uses `ON DELETE RESTRICT`: a seller cannot be deleted while products reference it. Delete those products first. An index on `seller_id` helps product filtering.
+
+Product prices use strings such as `"125.50"` and PostgreSQL `NUMERIC(12,2)`, which keeps the amount exact. Numeric JSON prices, zero/negative prices, and extra decimal digits are rejected. There is no order total calculation in this checkpoint.
+
+### 6.4 Why profiles are not separate tables
 
 For this checkpoint, each user has exactly the profile fields on its own row. A seller's business profile works the same way. A separate profile table would add another ID/relationship without adding useful behavior yet.
 
@@ -154,19 +175,19 @@ For this checkpoint, each user has exactly the profile fields on its own row. A 
 
 There are no independent POST/DELETE profile endpoints because a profile has no separate lifecycle here. A profile endpoint is a convenient view/edit interface to part of the existing record.
 
-### 6.4 Relationships and indexes
+### 6.5 Relationships and indexes
 
 There is currently **no foreign key connecting users and sellers**. A user does not automatically own a seller record, and matching emails do not establish a relationship. The same email may appear once in each table.
 
-Primary keys and unique email constraints create indexes automatically. Additional indexes are unnecessary for this small checkpoint's ID lookup and basic listing queries. There is no full-text search or pagination yet.
+Primary keys and unique email constraints create indexes automatically. Products additionally have an index on `seller_id` for filtering and foreign-key lookup. There is no full-text search or pagination yet. The seller-product foreign key enforces a database relationship, not permission to edit that seller's products; authentication and ownership checks are still future work.
 
 When authentication is added, the team must decide whether sellers belong to a common account table or link to user accounts. That future relationship should be added with a migration and ownership checks.
 
-### 6.5 Database constraints versus API validation
+### 6.6 Database constraints versus API validation
 
 Both layers have responsibilities:
 
-- PostgreSQL enforces generated primary keys, unique/lowercase/non-null emails, required names, name length/nonblank checks, and creation timestamps.
+- PostgreSQL enforces generated primary keys, unique/lowercase/non-null emails, required names, name length/nonblank checks, and creation timestamps. Products additionally have a seller foreign key and checks on their name, positive price, and non-negative stock.
 - Zod additionally checks email format, phone format, allowed URL schemes, numeric ID shape/range, maximum profile text lengths, and allowed request fields.
 
 Not every Zod rule is duplicated as a database constraint. Direct SQL bypasses API validation; do not claim the database rejects every malformed profile value on its own.
@@ -268,9 +289,26 @@ Other fields stay unchanged. Email cannot be changed using the profile PATCH; us
 
 ### DELETE behavior
 
-Deletion is permanent in this checkpoint. There are no orders or other linked records needing preservation. After deletion, GET returns 404. A second DELETE also returns 404; HTTP idempotency means the final resource state stays deleted, not that every response code must match.
+Successful deletion is permanent in this checkpoint. There are no orders needing purchase-history preservation; seller deletion is restricted by its product references. After deletion, GET returns 404. A second DELETE also returns 404; HTTP idempotency means the final resource state stays deleted, not that every response code must match.
 
-If later modules reference users/sellers, deletion rules will need review, possibly using foreign keys, deletion restrictions, or deactivation.
+Seller deletion now returns 409 if that seller has products because the product foreign key restricts deletion. Delete the products first. User and product deletion remain permanent. If orders are added later, product deletion rules will need review to preserve purchase history.
+
+### Product endpoints
+
+| Action | Endpoint | Success |
+| --- | --- | --- |
+| Create | POST `/api/products` | 201 |
+| List | GET `/api/products` | 200 |
+| Filter by seller | GET `/api/products?seller_id=1` | 200, array |
+| Read one | GET `/api/products/:id` | 200 |
+| Replace details | PUT `/api/products/:id` | 200 |
+| Delete | DELETE `/api/products/:id` | 204 |
+
+POST requires `seller_id` as a string, `name`, and `price`. Optional `stock`, `description`, and `image_url` default to 0, empty text, and null. Product PUT accepts the same product-detail fields, but not `seller_id`: it keeps the existing seller. Missing optional values reset on PUT, as in the other resources.
+
+The create controller uses `INSERT ... SELECT ... FROM sellers WHERE id = $1`. If no seller matches, no product is inserted and the API returns 404. The foreign key is the final database integrity check. The list endpoint adds `WHERE seller_id = $1` when the optional filter is supplied. A valid seller ID with no products returns an empty array.
+
+No authentication means the body-supplied seller ID does not establish caller identity. There is no stock reservation, automatic decrement, checkout, or payment flow; stock is simply an editable non-negative number here.
 
 ## 10. SQL safety and IDs
 
@@ -295,6 +333,10 @@ IDs are PostgreSQL BIGINT values and are returned as strings by `pg`. This avoid
 | `email: "not-an-email"` | 400 | Invalid email format |
 | ID `abc`, `0`, or `-1` | 400 | Invalid identifier |
 | Unknown valid ID | 404 | The requested record does not exist |
+| Seller deletion while products reference it | 409 | Foreign key restricts deletion |
+| Product price as a JSON number | 400 | Supply a decimal string such as `"125.50"` |
+| Negative or fractional product stock | 400 | Stock must be a non-negative integer |
+| Product creation with a missing seller | 404 | No matching seller exists |
 | Reused email in the same table | 409 | A unique constraint rejects the conflict |
 | Profile PATCH `{}` | 400 | There is nothing to update |
 | Profile PATCH with `email` | 400 | That endpoint does not permit email edits |
@@ -319,7 +361,7 @@ A migration transaction either commits the changes and filename records together
 
 The ordinary CRUD controller operations each use one SQL statement, so they do not need a manual multi-statement transaction. PostgreSQL executes each such statement atomically.
 
-Use the new `tshongkhang_mid_review` database for this simplified schema. It is not an automatic migration from the earlier order-system schema. Existing earlier data is not deleted or converted. Future schema changes should get new migration files rather than edits to an already applied file.
+Use the new `tshongkhang_mid_review` database for this simplified schema. It is not an automatic migration from the earlier order-system schema. Existing earlier data is not deleted or converted. If you already have the simplified user/seller database, run `npm run migrate` again: `002_products.sql` adds products without replacing your user/seller tables. Future schema changes should get new migration files rather than edits to an already applied file.
 
 Data lives in PostgreSQL rather than in a JavaScript array, so restarting Node.js does not remove it. The local test runner uses temporary schemas; those test records are intentionally cleaned up.
 
@@ -336,14 +378,15 @@ Import [the collection](../postman/Tshongkhang-Mid-Review.postman_collection.jso
 7. Delete the record; explain why 204 has no response body.
 8. GET it again to show 404.
 9. Repeat the flow for a seller and business profile.
+10. In the Products folder, create its demo seller, create/read/update/filter a product, show the seller deletion restriction, then delete the product and seller.
 
-The collection automatically saves IDs into `user_id` and `seller_id`. It has 25 requests including health, with expected-status checks. The base URL is a collection variable. No token or authorization header is required.
+The collection automatically saves IDs into `user_id`, `seller_id`, `product_seller_id`, and `product_id`. It has 37 requests including health, with expected-status checks. The base URL is a collection variable. No token or authorization header is required.
 
 Deleting the example records lets the collection run again with the same emails. If the demo stops halfway, finish the delete step or change the email before creating again.
 
 ## 14. Testing and what the evidence means
 
-`tests/integration.test.js` contains six integration tests. They use a real HTTP listener and PostgreSQL instead of mocked database results.
+`tests/integration.test.js` contains nine integration tests. They use a real HTTP listener and PostgreSQL instead of mocked database results.
 
 | Test area | What is checked |
 | --- | --- |
@@ -351,7 +394,10 @@ Deleting the example records lets the collection run again with the same emails.
 | User validation | Bad bodies/IDs/images, duplicate emails, and unsupported profile edits |
 | Seller lifecycle | The equivalent business-record and profile workflow |
 | Seller validation | The equivalent validation and uniqueness rules |
-| Current scope | Health succeeds and old auth/admin/commerce paths are unavailable |
+| Product CRUD | Create, list, read, replace, seller filtering, and delete |
+| Product validation | Decimal-string prices, non-negative integer stock, IDs, images, missing seller, and immutable seller link |
+| Product foreign key | Seller deletion blocked until products are removed; database checks stock and price |
+| Current scope | Health succeeds and old auth/admin/checkout paths are unavailable |
 | JSON parsing | Malformed JSON returns a clear 400 response |
 
 Before running, set TEST_DATABASE_URL to a test database. The role must be able to create a schema. Tests create a uniquely named schema, apply migrations twice to check repeatability, reset records between tests, and drop only their schema afterward.
@@ -384,7 +430,7 @@ This is a plan, not a description of existing functionality. Admin is more than 
 
 ### Q1. What did your team finish for the mid-review?
 
-“We implemented user and seller CRUD, profile viewing/editing, PostgreSQL persistence, validation, clear error handling, a migration, and a Postman demonstration. Authentication and admin are next sprint.”
+“We implemented user, seller, and product CRUD, profile viewing/editing, PostgreSQL persistence, validation, clear error handling, migrations, and a Postman demonstration. Authentication and admin are next sprint.”
 
 ### Q2. Why can you show the project without a frontend?
 
@@ -476,19 +522,19 @@ This is a plan, not a description of existing functionality. Admin is more than 
 
 ### Q24. What does the migration do?
 
-“It creates users and sellers. The runner records applied migration filenames so rerunning it does not recreate the same tables.”
+“The first migration creates users and sellers. The second adds products. The runner records applied migration filenames so rerunning it does not recreate the same tables.”
 
 ### Q25. What did you test?
 
-“Both CRUD lifecycles, profile editing, validation, duplicate emails, deletion/missing records, malformed JSON, and the current route scope, using PostgreSQL and HTTP.”
+“User, seller, and product CRUD, profile editing, validation, duplicate emails, product price/stock rules, seller filtering, the product foreign key, deletion/missing records, malformed JSON, and the current route scope, using PostgreSQL and HTTP.”
 
 ### Q26. Does storing an image URL upload an image?
 
 “No. We validate and store the URL only. File uploads and image-content verification are not implemented.”
 
-### Q27. Why are there no foreign keys in the ERD?
+### Q27. What relationship does the foreign key represent?
 
-“The current two application entities are independent. We should add a foreign key when an actual ownership relationship is designed, rather than invent a relationship the code does not use.”
+“Products reference sellers through seller_id. One seller can have many products, and a seller cannot be deleted while products still reference it. Users and sellers remain separate until the account model is designed.”
 
 ### Q28. Is this ready for real customer data?
 
@@ -501,6 +547,18 @@ This is a plan, not a description of existing functionality. Admin is more than 
 ### Q30. What will you do next?
 
 “Agree on the account model, implement secure authentication and ownership rules, add admin permissions, and extend tests and Postman requests for those features.”
+
+### Q31. Why is product price a string in JSON?
+
+“We store money as PostgreSQL NUMERIC(12,2) and leave it as a decimal string in JavaScript, so we do not introduce floating-point rounding. The API requires exactly two fractional digits.”
+
+### Q32. Why does deleting a seller sometimes return 409?
+
+“Products still reference that seller. The foreign key uses ON DELETE RESTRICT, so we must delete the products before deleting the seller.”
+
+### Q33. Does a seller ID in product creation prove ownership?
+
+“No. It selects the seller record that the product belongs to. Authentication and authorization are still next-sprint work.”
 
 ## 17. Suggested preparation order
 

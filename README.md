@@ -1,8 +1,8 @@
 # Tshongkhang — mid-review CRUD backend
 
-A simple semester-project backend for **users, sellers, and their profiles**, demonstrated through Postman. Built with Node.js, Express, JavaScript ES modules, PostgreSQL, `pg`, dotenv, and Zod.
+A simple semester-project backend for **users, sellers, products, and user/seller profiles**, demonstrated through Postman. Built with Node.js, Express, JavaScript ES modules, PostgreSQL, `pg`, dotenv, and Zod.
 
-**Current sprint:** CRUD and profile management only. **Next sprint:** authentication, ownership checks, and admin features. All current endpoints are open for the local demonstration; use sample data.
+**Current sprint:** user/seller/product CRUD and profile management only. **Next sprint:** authentication, ownership checks, and admin features. All current endpoints are open for the local demonstration; use sample data.
 
 ## Setup
 
@@ -33,6 +33,8 @@ Default address: `http://localhost:3000/api`. Check `GET /api/health`.
 
 **Moving from the earlier implementation:** use this new empty database. The schema has been simplified; this is not an upgrade migration for the earlier storefront/order database. Do not run it against that database. Nothing automatically drops or converts previous data. The earlier implementation remains in Git history.
 
+If you already use the simplified mid-review database, run `npm run migrate` again to apply `002_products.sql`. Existing users and sellers are preserved.
+
 ## API
 
 No authorization header or token is required. JSON request bodies use `Content-Type: application/json`.
@@ -51,9 +53,14 @@ No authorization header or token is required. JSON request bodies use `Content-T
 | GET | `/api/sellers` | List sellers |
 | GET | `/api/sellers/:id` | Read one seller |
 | PUT | `/api/sellers/:id` | Replace editable seller fields |
-| DELETE | `/api/sellers/:id` | Delete a seller and its profile |
+| DELETE | `/api/sellers/:id` | Delete a seller and its profile (delete its products first) |
 | GET | `/api/sellers/:id/profile` | View business profile fields |
 | PATCH | `/api/sellers/:id/profile` | Edit selected business profile fields |
+| POST | `/api/products` | Create a product for an existing seller |
+| GET | `/api/products` | List products; optional `?seller_id=1` filter |
+| GET | `/api/products/:id` | Read one product |
+| PUT | `/api/products/:id` | Replace editable product fields |
+| DELETE | `/api/products/:id` | Delete a product |
 
 Minimal user body for POST/PUT:
 
@@ -71,13 +78,21 @@ Minimal seller body for POST/PUT:
 
 Optional fields: `phone`, `location`, `description`, `logo_url`.
 
-**PUT replaces the editable record:** required name/business name and email must be supplied; omitted optional fields reset to empty text or null. **PATCH profile edits only supplied fields:** user profiles accept `name`, `phone`, `address`, `avatar_url`; seller profiles accept `business_name`, `phone`, `location`, `description`, `logo_url`. Email changes use PUT. Profile responses omit email and `created_at`; full record endpoints include them.
+Product POST example (use an existing seller ID):
 
-Profiles are stored on their user/seller row. Creating a record creates its profile fields; deleting the record deletes them. Users and sellers are independent in this checkpoint, with no foreign key between them. The same email can occur once in each table.
+```json
+{ "seller_id": "1", "name": "Red rice 1kg", "price": "125.50", "stock": 10 }
+```
+
+Optional product fields: `description` (default `""`), `stock` (default `0`), and `image_url` (default `null`). Price must be a positive decimal string with exactly two fractional digits, up to `9999999999.99`; PostgreSQL stores it as `NUMERIC(12,2)`. Stock must be a non-negative integer. Product PUT requires `name` and `price`, accepts the optional fields, and keeps the original seller; do not include `seller_id` in PUT. A missing seller on create returns 404. Filtering by a valid seller ID with no products returns an empty array. Delete products before deleting their seller, otherwise seller deletion returns 409.
+
+**User/seller PUT replaces the editable record:** required name/business name and email must be supplied; omitted optional fields reset to empty text or null. **PATCH profile edits only supplied fields:** user profiles accept `name`, `phone`, `address`, `avatar_url`; seller profiles accept `business_name`, `phone`, `location`, `description`, `logo_url`. Email changes use PUT. Profile responses omit email and `created_at`; full record endpoints include them.
+
+Profiles are stored on their user/seller row. Creating a record creates its profile fields; deleting the record deletes them. Users and sellers are independent in this checkpoint, with no foreign key between them. Products have a `seller_id` foreign key to sellers. The same email can occur once in each table.
 
 Emails are lowercase and unique within each table. Optional phones/images accept `null`; addresses/locations/descriptions accept empty strings. Image URLs must use HTTP(S); image contents are not checked. IDs are positive numeric strings. Unknown body fields and empty profile PATCH requests are rejected.
 
-Status codes: **201** created, **200** success, **204** deleted (no body), **400** invalid input/JSON/ID, **404** missing record/route, **409** duplicate email, **413** oversized JSON, **500** unexpected server error. Errors return `{ "error": "message" }`, with `details` for validation errors.
+Status codes: **201** created, **200** success, **204** deleted (no body), **400** invalid input/JSON/ID, **404** missing record/route, **409** duplicate email or related-record conflict, **413** oversized JSON, **500** unexpected server error. Errors return `{ "error": "message" }`, with `details` for validation errors.
 
 ## Postman demonstration
 
@@ -85,7 +100,7 @@ Status codes: **201** created, **200** success, **204** deleted (no body), **400
 2. Confirm the collection variable `base_url` is `http://localhost:3000/api`.
 3. Select **No Auth**; the imported collection already uses it.
 4. Run the collection in order, or send requests in order inside each folder.
-5. Create requests automatically save `user_id` and `seller_id`. Each request checks its expected HTTP status.
+5. Create requests automatically save user/seller IDs; the Products folder also saves `product_seller_id` and `product_id`. Each request checks its expected HTTP status.
 6. The last requests delete demo records and verify 404. If you stop before deletion, delete the saved record before rerunning the same create request, or change its email.
 
 See [the detailed demonstration guide](docs/postman-demo.md), [curl examples](docs/curl.md), and [the tutor preparation guide](docs/semester-review-guide.md).
@@ -97,19 +112,19 @@ src/
   app.js             Express setup and route mounting
   server.js          Start/stop server and connect to PostgreSQL
   config/            Environment validation, connection pool, migration transaction helper
-  routes/            User and seller endpoint definitions
+  routes/            User, seller and product endpoint definitions
   controllers/       Small functions containing SQL and HTTP responses
   middleware/        Request validation and centralized errors
   schemas/           Zod request rules
 db/
   migrate.js         Apply SQL files once using schema_migrations
-  migrations/        Two application tables
+  migrations/        Three application tables
 tests/              HTTP + PostgreSQL integration tests
 postman/            Importable collection
 docs/               ERD, demo instructions, technical explanation and tutor questions
 ```
 
-SQL stays directly in the controllers for this small CRUD checkpoint. No service/repository layer, authentication library, admin module, product module, or order module is needed. See the [schema ERD](docs/erd.md).
+SQL stays directly in the controllers for this small CRUD checkpoint. No service/repository layer, authentication library, admin module, or order module is needed. See the [schema ERD](docs/erd.md).
 
 ## Tests
 
@@ -123,7 +138,7 @@ CREATE DATABASE tshongkhang_mid_review_test OWNER tshongkhang;
 TEST_DATABASE_URL=postgresql://tshongkhang:local_password@localhost:5432/tshongkhang_mid_review_test npm test
 ```
 
-Tests create a uniquely named temporary schema and drop only that schema afterward. They check user/seller CRUD, profile changes, validation, duplicate emails, missing records, malformed JSON, and removal of the earlier routes.
+Tests create a uniquely named temporary schema and drop only that schema afterward. The nine tests check user/seller/product CRUD, profile changes, validation, duplicate emails, missing records, seller filtering, product foreign keys, malformed JSON, and removal of the earlier routes.
 
 On Debian/Ubuntu with PostgreSQL 16 and `postgresql-common`, a disposable database is another option:
 
@@ -133,4 +148,4 @@ pg_virtualenv -v 16 bash -c 'TEST_DATABASE_URL="postgresql://$PGUSER:$PGPASSWORD
 
 ## Deferred work
 
-Next sprint: secure account registration/login, password hashing, token authentication, authorization/record ownership, and admin roles. Products, storefront slugs, checkout, orders, stock management, payment verification, notifications, file uploads, and frontend work are not part of this mid-review API. Lists are unpaginated and deletion is permanent in this version.
+Next sprint: secure account registration/login, password hashing, token authentication, authorization/record ownership, and admin roles. Storefront slugs, checkout, orders, automatic stock deductions, payment verification, notifications, file uploads, and frontend work are not part of this mid-review API. Lists are unpaginated and deletion is permanent in this version.
