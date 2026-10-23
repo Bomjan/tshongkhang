@@ -1,5 +1,7 @@
 # Mid-review database ERD
 
+Open the [editable draw.io version](tshongkhang-erd.drawio) in draw.io / diagrams.net using **File → Open From → Device**.
+
 The current application has three application tables. Sellers own products; users remain separate. User/seller profiles are fields on their respective tables, so there is no separate profile table or relationship to maintain.
 
 ```mermaid
