@@ -1,17 +1,17 @@
 import { Router } from 'express';
+import { sellerController } from '../controllers/seller.js';
 import { validate } from '../middleware/validate.js';
-import { profileSchema, createProductSchema, updateProductSchema, idParams, orderFilterSchema, statusSchema } from '../schemas/requests.js';
+import { idParams, sellerSchema, sellerProfileSchema } from '../schemas/requests.js';
 
-export function sellerRoutes(controller, auth) {
+export function sellerRoutes(pool) {
   const router = Router();
-  router.use(auth);
-  router.get('/profile', controller.profile);
-  router.patch('/profile', validate(profileSchema), controller.updateProfile);
-  router.post('/products', validate(createProductSchema), controller.createProduct);
-  router.get('/products', controller.products);
-  router.patch('/products/:id', validate(idParams, 'params'), validate(updateProductSchema), controller.updateProduct);
-  router.get('/orders', validate(orderFilterSchema, 'query'), controller.orders);
-  router.get('/orders/:id', validate(idParams, 'params'), controller.order);
-  router.patch('/orders/:id/status', validate(idParams, 'params'), validate(statusSchema), controller.changeStatus);
+  const controller = sellerController(pool);
+  router.post('/', validate(sellerSchema), controller.create);
+  router.get('/', controller.list);
+  router.get('/:id', validate(idParams, 'params'), controller.get);
+  router.put('/:id', validate(idParams, 'params'), validate(sellerSchema), controller.update);
+  router.delete('/:id', validate(idParams, 'params'), controller.remove);
+  router.get('/:id/profile', validate(idParams, 'params'), controller.profile);
+  router.patch('/:id/profile', validate(idParams, 'params'), validate(sellerProfileSchema), controller.updateProfile);
   return router;
 }

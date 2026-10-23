@@ -6,7 +6,7 @@ const config = readConfig();
 const pool = createPool(config.DATABASE_URL);
 pool.on('error', error => console.error('Idle database connection failed:', error.message));
 await pool.query('SELECT 1');
-const server = createApp(pool, config).listen(config.PORT, () => {
+const server = createApp(pool).listen(config.PORT, () => {
   console.log(`Tshongkhang API listening on port ${config.PORT}`);
 });
 
