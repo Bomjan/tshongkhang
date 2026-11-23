@@ -3,7 +3,11 @@ import { HttpError } from '../middleware/errors.js';
 export function productController(pool) {
   return {
     async create(req, res) {
-      const { seller_id, name, description, price, stock, image_url } = req.validated.body;
+      const { name, description, price, stock, image_url } = req.validated.body;
+      const seller_id = req.seller.id;
+      if (req.validated.body.seller_id && req.validated.body.seller_id !== seller_id) {
+        throw new HttpError(403, 'You can only add products to your own store');
+      }
       // INSERT ... SELECT creates a product only when the selected seller exists.
       const result = await pool.query(`INSERT INTO products (seller_id, name, description, price, stock, image_url)
         SELECT id, $2, $3, $4, $5, $6 FROM sellers WHERE id = $1 RETURNING *`,
@@ -26,13 +30,13 @@ export function productController(pool) {
     async update(req, res) {
       const { name, description, price, stock, image_url } = req.validated.body;
       const result = await pool.query(`UPDATE products SET name = $1, description = $2, price = $3,
-        stock = $4, image_url = $5 WHERE id = $6 RETURNING *`,
-      [name, description, price, stock, image_url, req.validated.params.id]);
+        stock = $4, image_url = $5 WHERE id = $6 AND seller_id = $7 RETURNING *`,
+      [name, description, price, stock, image_url, req.validated.params.id, req.seller.id]);
       if (!result.rowCount) throw new HttpError(404, 'Product not found');
       res.json(result.rows[0]);
     },
     async remove(req, res) {
-      const result = await pool.query('DELETE FROM products WHERE id = $1', [req.validated.params.id]);
+      const result = await pool.query('DELETE FROM products WHERE id = $1 AND seller_id = $2', [req.validated.params.id, req.seller.id]);
       if (!result.rowCount) throw new HttpError(404, 'Product not found');
       res.status(204).end();
     },

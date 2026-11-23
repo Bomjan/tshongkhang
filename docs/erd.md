@@ -1,50 +1,69 @@
-# Mid-review database ERD
+# Sprint 1–2 database ERD
 
-Open the [editable draw.io version](tshongkhang-erd.drawio) in draw.io / diagrams.net using **File → Open From → Device**.
-
-The current application has three application tables. Sellers own products; users remain separate. User/seller profiles are fields on their respective tables, so there is no separate profile table or relationship to maintain.
+Open the [editable draw.io diagram](tshongkhang-erd.drawio) in diagrams.net. The active flow uses seller accounts, sessions, products, orders and order items. Seller profile fields live on `sellers`; guest contact details live on each `orders` row.
 
 ```mermaid
 erDiagram
-    sellers ||--o{ products : lists
+    sellers ||--o{ seller_sessions : authenticates
+    sellers ||--o{ products : owns
+    sellers ||--o{ orders : receives
+    orders ||--|{ order_items : contains
 
-    users {
-        bigint id PK
-        text name
-        text email UK
-        text phone "nullable"
-        text address "default empty string"
-        text avatar_url "nullable"
-        timestamptz created_at
-    }
     sellers {
         bigint id PK
+        text slug UK "stable public shop address"
         text business_name
         text email UK
-        text phone "nullable"
-        text location "default empty string"
-        text description "default empty string"
-        text logo_url "nullable"
+        text password_hash "nullable only for legacy sellers"
+        text phone
+        text location
+        text description
+        text logo_url
         timestamptz created_at
+    }
+    seller_sessions {
+        text token_hash PK
+        bigint seller_id FK
+        timestamptz expires_at
     }
     products {
         bigint id PK
         bigint seller_id FK
         text name
-        text description "default empty string"
-        numeric_12_2 price "positive"
-        integer stock "non-negative, default 0"
-        text image_url "nullable"
+        text description
+        numeric_12_2 price
+        integer stock
+        text image_url
         timestamptz created_at
     }
-    schema_migrations {
-        text name PK
-        timestamptz applied_at
+    orders {
+        uuid id PK
+        uuid checkout_key UK
+        bigint seller_id FK
+        text customer_name
+        text customer_phone
+        text customer_address
+        text note
+        numeric_16_2 total
+        text status "placed"
+        timestamptz created_at
+    }
+    order_items {
+        bigint id PK
+        uuid order_id FK
+        bigint product_id "snapshot identifier, not a live FK"
+        text product_name
+        numeric_12_2 unit_price
+        integer quantity
     }
 ```
 
-The [SQL migration](../db/migrations/001_mid_review.sql) creates `users` and `sellers`. The migration runner creates the administrative `schema_migrations` table to remember applied files. The [product migration](../db/migrations/002_products.sql) adds `products` with a `seller_id` foreign key to `sellers.id` using `ON DELETE RESTRICT`. A seller can have zero or many products, and each product has one seller. Products must be deleted before their seller. Users have no relationship to sellers yet. `numeric_12_2` denotes PostgreSQL `NUMERIC(12,2)`.
+`order_items.product_id`, name and price are snapshots. Deliberately avoiding a live product foreign key lets a seller delete a catalog product while preserving the original order and checkout retry comparison. `order_id` remains a foreign key to the saved order. Orders and products restrict deletion of their seller; sessions cascade when a seller is deleted.
 
-An index on `products.seller_id` supports seller filtering. Product checks require a nonblank name, positive price, and non-negative stock. Primary keys are generated identities. Unique email constraints automatically create indexes; primary keys are indexed as well. Emails must be lowercase, names must be nonblank, and names/emails/creation times cannot be null. Optional phones and image URLs may be null. Zod provides additional API validation for emails, phone formatting, URL schemes, and text length limits.
+Migration `003_sprint_two.sql` extends the previous schema without deleting existing data. `users` remains as a legacy table with `id`, `name`, `email`, `phone`, `address`, `avatar_url` and `created_at`; it has no active routes and is not used by guest checkout. `schema_migrations` tracks applied files. Both are included in the draw.io diagram for completeness.
 
-Future authentication work must decide whether to link sellers to user accounts or introduce a shared account table. That relationship is not implemented here.
+Product prices and order line prices use `NUMERIC(12,2)`; order totals use `NUMERIC(16,2)`. APIs serialize these as decimal strings. Unique email and checkout-key constraints and the primary keys are indexed. Additional indexes support products/orders/sessions by seller, session expiration and items by order.
+
+The application enforces cart limits, seller ownership and customer input validation. Checkout inserts orders and items and updates stock in one transaction with product row locks. The browser does not supply a trusted price or total.
+
+Migration `004_shop_slugs.sql` adds the unique, non-null seller `slug`, validates its format and reserves application route names. Existing shop names are converted to addresses in ID order, with collision suffixes. New registrations allocate addresses transactionally. Changing a business name does not change its slug.

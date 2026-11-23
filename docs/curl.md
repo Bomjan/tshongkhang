@@ -1,59 +1,32 @@
-# Simple CRUD curl examples
+# Sprint 1–2 curl examples
 
-The primary review tool is [Postman](postman-demo.md). These commands show the same basic user workflow without authentication. Replace `1` with the ID returned by POST if necessary.
+Use a fresh seller email. curl saves the seller session in a local cookie file; keep that file private.
 
 ```sh
 BASE=http://localhost:3000/api
+COOKIE_JAR=/tmp/tshongkhang-demo-cookies.txt
 curl -sS "$BASE/health"
+curl -sS -c "$COOKIE_JAR" "$BASE/auth/register" -H 'Content-Type: application/json' \
+  -d '{"business_name":"Pema Store","email":"pema-new@example.com","password":"semester-demo-password","location":"Thimphu"}'
+curl -sS -b "$COOKIE_JAR" "$BASE/auth/me"
 
-# Create
-curl -sS -X POST "$BASE/users" -H 'Content-Type: application/json' \
-  -d '{"name":"Pema","email":"pema@example.com","phone":"17123456","address":"Thimphu"}'
-
-# List and read
-curl -sS "$BASE/users"
-curl -sS "$BASE/users/1"
-
-# Replace editable record fields
-curl -sS -X PUT "$BASE/users/1" -H 'Content-Type: application/json' \
-  -d '{"name":"Pema Dorji","email":"pema@example.com","phone":"17123456","address":"Thimphu"}'
-
-# Read and edit profile
-curl -sS "$BASE/users/1/profile"
-curl -sS -X PATCH "$BASE/users/1/profile" -H 'Content-Type: application/json' \
-  -d '{"address":"Paro"}'
-
-# Delete (204: no response body)
-curl -i -X DELETE "$BASE/users/1"
-
-# Seller: same operations, different fields
-curl -sS -X POST "$BASE/sellers" -H 'Content-Type: application/json' \
-  -d '{"business_name":"Pema Store","email":"shop@example.com","location":"Thimphu"}'
+# Use the returned seller ID in the public storefront filter.
+curl -sS -b "$COOKIE_JAR" "$BASE/products" -H 'Content-Type: application/json' \
+  -d '{"name":"Red rice 1kg","price":"125.50","stock":10,"description":"Bhutanese rice"}'
 curl -sS "$BASE/sellers"
-curl -sS "$BASE/sellers/1"
-curl -sS -X PUT "$BASE/sellers/1" -H 'Content-Type: application/json' \
-  -d '{"business_name":"Pema Grocery","email":"shop@example.com","location":"Thimphu"}'
-curl -sS "$BASE/sellers/1/profile"
-curl -sS -X PATCH "$BASE/sellers/1/profile" -H 'Content-Type: application/json' \
-  -d '{"location":"Paro","description":"A local grocery shop"}'
-curl -i -X DELETE "$BASE/sellers/1"
-```
-
-## Product CRUD
-
-Create a seller first and replace the seller/product IDs below with the returned IDs. Delete products before deleting their seller.
-
-```sh
-BASE=http://localhost:3000/api
-curl -sS -X POST "$BASE/sellers" -H 'Content-Type: application/json' \
-  -d '{"business_name":"Rice Shop","email":"rice-shop@example.com"}'
-curl -sS -X POST "$BASE/products" -H 'Content-Type: application/json' \
-  -d '{"seller_id":"1","name":"Red rice 1kg","price":"125.50","stock":10}'
-curl -sS "$BASE/products"
 curl -sS "$BASE/products?seller_id=1"
 curl -sS "$BASE/products/1"
-curl -sS -X PUT "$BASE/products/1" -H 'Content-Type: application/json' \
-  -d '{"name":"Red rice 1kg - updated","price":"130.00","stock":8}'
-curl -i -X DELETE "$BASE/products/1"
-curl -i -X DELETE "$BASE/sellers/1"
+curl -sS -b "$COOKIE_JAR" -X PUT "$BASE/products/1" -H 'Content-Type: application/json' \
+  -d '{"name":"Red rice 1kg","price":"130.00","stock":10}'
+
+# Guest checkout: replace seller/product IDs. Reuse the key only for a retry of this exact order.
+curl -sS "$BASE/stores/1/orders" -H 'Content-Type: application/json' \
+  -d '{"checkout_key":"9d645d6f-7b3f-4b45-9c9f-69df05414649","customer_name":"Sonam","customer_phone":"17123456","customer_address":"Changzamtog, Thimphu","items":[{"product_id":"1","quantity":2}]}'
+
+curl -i -b "$COOKIE_JAR" -X DELETE "$BASE/products/1"
+curl -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE/auth/logout" -H 'Content-Type: application/json' -d '{}'
+curl -sS -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE/auth/login" -H 'Content-Type: application/json' \
+  -d '{"email":"pema-new@example.com","password":"semester-demo-password"}'
 ```
+
+Orders retain item names and prices when catalog products are changed or deleted. Seller order viewing/status management is Sprint 3.

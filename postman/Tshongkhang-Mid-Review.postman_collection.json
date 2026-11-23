@@ -1,11 +1,8 @@
 {
   "info": {
-    "name": "Tshongkhang - Mid Review CRUD",
-    "description": "Local semester checkpoint: user/seller/product CRUD and profiles. No authentication or admin. Run requests in order; create requests save IDs and delete requests clean up demo records.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "auth": {
-    "type": "noauth"
+    "name": "Tshongkhang · Sprint 1–2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Seller accounts, product ownership, public storefront and guest checkout. Enable Postman cookies. Clear checkout_key to place a separate order."
   },
   "variable": [
     {
@@ -13,25 +10,33 @@
       "value": "http://localhost:3000/api"
     },
     {
-      "key": "user_id",
-      "value": ""
+      "key": "seller_email",
+      "value": "review-new@example.com"
+    },
+    {
+      "key": "seller_password",
+      "value": "semester-demo-password"
     },
     {
       "key": "seller_id",
       "value": ""
     },
     {
-      "key": "product_seller_id",
+      "key": "product_id",
       "value": ""
     },
     {
-      "key": "product_id",
+      "key": "checkout_key",
+      "value": ""
+    },
+    {
+      "key": "order_id",
       "value": ""
     }
   ],
   "item": [
     {
-      "name": "Health check",
+      "name": "Health",
       "request": {
         "method": "GET",
         "header": [],
@@ -43,17 +48,17 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+              "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
             ]
           }
         }
       ]
     },
     {
-      "name": "Users",
+      "name": "Seller account",
       "item": [
         {
-          "name": "1. Create users",
+          "name": "Register",
           "request": {
             "method": "POST",
             "header": [
@@ -62,10 +67,10 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{base_url}}/users",
+            "url": "{{base_url}}/auth/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Pema\",\n  \"email\": \"users-demo@example.com\",\n  \"phone\": \"17123456\",\n  \"address\": \"Thimphu\"\n}",
+              "raw": "{\n  \"business_name\": \"Pema Store\",\n  \"email\": \"{{seller_email}}\",\n  \"password\": \"{{seller_password}}\",\n  \"location\": \"Thimphu\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -79,65 +84,27 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
-                  "if (pm.response.code === 201) pm.collectionVariables.set('user_id', pm.response.json().id);"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('seller_id', pm.response.json().id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "2. List users",
+          "name": "Login",
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/users"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "3. Get record",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/users/{{user_id}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "4. Replace record (PUT)",
-          "request": {
-            "method": "PUT",
+            "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
-            "url": "{{base_url}}/users/{{user_id}}",
+            "url": "{{base_url}}/auth/login",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Pema Updated\",\n  \"email\": \"users-demo@example.com\",\n  \"phone\": \"17123456\",\n  \"address\": \"Thimphu\"\n}",
+              "raw": "{\n  \"email\": \"{{seller_email}}\",\n  \"password\": \"{{seller_password}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -151,18 +118,19 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('seller_id', pm.response.json().id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "5. Get profile",
+          "name": "My session",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{base_url}}/users/{{user_id}}/profile"
+            "url": "{{base_url}}/auth/me"
           },
           "event": [
             {
@@ -170,14 +138,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "6. Edit profile (PATCH)",
+          "name": "Edit shop profile",
           "request": {
             "method": "PATCH",
             "header": [
@@ -186,10 +154,10 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{base_url}}/users/{{user_id}}/profile",
+            "url": "{{base_url}}/sellers/{{seller_id}}/profile",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"address\": \"Paro\"\n}",
+              "raw": "{\n  \"description\": \"Local Bhutanese goods\",\n  \"location\": \"Paro\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -203,33 +171,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "7. View updated profile",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/users/{{user_id}}/profile"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "8. Reject duplicate email",
+          "name": "Logout",
           "request": {
             "method": "POST",
             "header": [
@@ -238,73 +187,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{base_url}}/users",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Pema\",\n  \"email\": \"users-demo@example.com\",\n  \"phone\": \"17123456\",\n  \"address\": \"Thimphu\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "9. Reject invalid email",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/users",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Pema\",\n  \"email\": \"not-an-email\",\n  \"phone\": \"17123456\",\n  \"address\": \"Thimphu\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "10. Reject empty profile update",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/users/{{user_id}}/profile",
+            "url": "{{base_url}}/auth/logout",
             "body": {
               "mode": "raw",
               "raw": "{}",
@@ -321,45 +204,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "11. Delete record",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/users/{{user_id}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 204', function () { pm.response.to.have.status(204); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "12. Deleted record returns 404",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/users/{{user_id}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([204]); });"
                 ]
               }
             }
@@ -368,10 +213,10 @@
       ]
     },
     {
-      "name": "Sellers",
+      "name": "Products and storefront",
       "item": [
         {
-          "name": "1. Create sellers",
+          "name": "Create product",
           "request": {
             "method": "POST",
             "header": [
@@ -380,10 +225,10 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{base_url}}/sellers",
+            "url": "{{base_url}}/products",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"business_name\": \"Pema Store\",\n  \"email\": \"sellers-demo@example.com\",\n  \"phone\": \"17123456\",\n  \"location\": \"Thimphu\"\n}",
+              "raw": "{\n  \"name\": \"Red rice 1kg\",\n  \"description\": \"Local rice\",\n  \"price\": \"125.50\",\n  \"stock\": 10\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -397,15 +242,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
-                  "if (pm.response.code === 201) pm.collectionVariables.set('seller_id', pm.response.json().id);"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([201]); });",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('product_id', pm.response.json().id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "2. List sellers",
+          "name": "Public shops",
           "request": {
             "method": "GET",
             "header": [],
@@ -417,14 +262,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "3. Get record",
+          "name": "Public store profile",
           "request": {
             "method": "GET",
             "header": [],
@@ -436,51 +281,18 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "4. Replace record (PUT)",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/sellers/{{seller_id}}",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"business_name\": \"Pema Store Updated\",\n  \"email\": \"sellers-demo@example.com\",\n  \"phone\": \"17123456\",\n  \"location\": \"Thimphu\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "5. Get profile",
+          "name": "Public products",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{base_url}}/sellers/{{seller_id}}/profile"
+            "url": "{{base_url}}/products?seller_id={{seller_id}}"
           },
           "event": [
             {
@@ -488,314 +300,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "6. Edit profile (PATCH)",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/sellers/{{seller_id}}/profile",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"location\": \"Paro\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "7. View updated profile",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/sellers/{{seller_id}}/profile"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "8. Reject duplicate email",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/sellers",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"business_name\": \"Pema Store\",\n  \"email\": \"sellers-demo@example.com\",\n  \"phone\": \"17123456\",\n  \"location\": \"Thimphu\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "9. Reject invalid email",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/sellers",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"business_name\": \"Pema Store\",\n  \"email\": \"not-an-email\",\n  \"phone\": \"17123456\",\n  \"location\": \"Thimphu\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "10. Reject empty profile update",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/sellers/{{seller_id}}/profile",
-            "body": {
-              "mode": "raw",
-              "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "11. Delete record",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/sellers/{{seller_id}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 204', function () { pm.response.to.have.status(204); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "12. Deleted record returns 404",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/sellers/{{seller_id}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Products",
-      "item": [
-        {
-          "name": "1. Create seller for product demo",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/sellers",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"business_name\": \"Rice Shop\",\n  \"email\": \"products-demo@example.com\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
-                  "if (pm.response.code === 201) pm.collectionVariables.set('product_seller_id', pm.response.json().id);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "2. Create product",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/products",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"seller_id\": \"{{product_seller_id}}\",\n  \"name\": \"Red rice 1kg\",\n  \"description\": \"Bhutanese red rice\",\n  \"price\": \"125.50\",\n  \"stock\": 10\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
-                  "if (pm.response.code === 201) pm.collectionVariables.set('product_id', pm.response.json().id);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "3. List products",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/products"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "4. Filter by seller",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/products?seller_id={{product_seller_id}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "5. Get product",
+          "name": "Public product details",
           "request": {
             "method": "GET",
             "header": [],
@@ -807,14 +319,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "6. Replace product details",
+          "name": "Edit product",
           "request": {
             "method": "PUT",
             "header": [
@@ -826,7 +338,7 @@
             "url": "{{base_url}}/products/{{product_id}}",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Red rice 1kg - updated\",\n  \"price\": \"130.00\",\n  \"stock\": 8\n}",
+              "raw": "{\n  \"name\": \"Red rice 1kg\",\n  \"description\": \"Local rice\",\n  \"price\": \"130.00\",\n  \"stock\": 10\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -840,99 +352,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200]); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "7. Reject numeric price",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/products",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"seller_id\": \"{{product_seller_id}}\",\n  \"name\": \"Red rice 1kg\",\n  \"description\": \"Bhutanese red rice\",\n  \"price\": 125.5,\n  \"stock\": 10\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "8. Reject missing seller",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{base_url}}/products",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"seller_id\": \"9223372036854775807\",\n  \"name\": \"Red rice 1kg\",\n  \"description\": \"Bhutanese red rice\",\n  \"price\": \"125.50\",\n  \"stock\": 10\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "9. Seller with products cannot be deleted",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/sellers/{{product_seller_id}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "10. Delete product",
+          "name": "Delete product",
           "request": {
             "method": "DELETE",
             "header": [],
@@ -944,18 +371,37 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 204', function () { pm.response.to.have.status(204); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([204]); });"
                 ]
               }
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "Guest checkout",
+      "item": [
         {
-          "name": "11. Deleted product returns 404",
+          "name": "Place guest order (repeat safely)",
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{base_url}}/products/{{product_id}}"
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/stores/{{seller_id}}/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checkout_key\": \"{{checkout_key}}\",\n  \"customer_name\": \"Sonam\",\n  \"customer_phone\": \"17123456\",\n  \"customer_address\": \"Changzamtog, Thimphu\",\n  \"items\": [\n    {\n      \"product_id\": \"{{product_id}}\",\n      \"quantity\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "event": [
             {
@@ -963,26 +409,17 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });"
+                  "pm.test('Expected status', function () { pm.expect(pm.response.code).to.be.oneOf([200,201]); });",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('order_id', pm.response.json().id);"
                 ]
               }
-            }
-          ]
-        },
-        {
-          "name": "12. Delete demo seller",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": "{{base_url}}/sellers/{{product_seller_id}}"
-          },
-          "event": [
+            },
             {
-              "listen": "test",
+              "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 204', function () { pm.response.to.have.status(204); });"
+                  "if (!pm.collectionVariables.get('checkout_key')) pm.collectionVariables.set('checkout_key', pm.variables.replaceIn('{{$guid}}'));"
                 ]
               }
             }
